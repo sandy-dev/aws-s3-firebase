@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+  <meta name="author" content="">
+  <title>video upload</title>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.4.1/css/all.css"
+    integrity="sha384-5sAR7xN1Nv6T6+dT2mhtzEpVJvfS3NScPQTrOxhwjIuvcA67KV2R5Jz6kr4abQsz" crossorigin="anonymous"
+    rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.4.1/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.18.0/css/mdb.min.css" rel="stylesheet">
+
+
+  <link href="https://transloadit.edgly.net/releases/uppy/v1.16.1/uppy.min.css" rel="stylesheet">
+</head>
+
+<body>
+  <div>
+
+    <form style="padding: 100px;">
+      Title
+      <input type="text" name="title" id="title" class="form-control input border-light rounded-0 mb-3" required>
+      Video File
+      <input type="text" name="file" id="file" class="form-control input border-light rounded-0 mb-3" required>
+      <button type="button" id='uppy-select-files' class="UppyModalOpenerBtn btn btn-primary shadow-none m-0 submit" button>
+        Submit
+      </button>
+    </form>
+
+
+    <!-- you'll need to add a class - 'UppyModalOpenerBtn' in this case - to use as the trigger in the Dashboard below... -->
+    <div class="DashboardContainer" id="drag-drop-area"></div>
+    <script src="https://transloadit.edgly.net/releases/uppy/v1.16.1/uppy.min.js"></script>
+    <script> // our Uppy configuration starts here
+      const AwsS3 = Uppy.AwsS3 // that's an uppercase "A" and lowercase "ws"...
+      const uppy = Uppy.Core({
+        id: 'uppyUpload', // use an id if you plan to use multiple Uppys (on different pages etc.)
+        autoProceed: false, // if true the file uploads as soon as you drag it into the upload area, or select it - your user cannot edit file name or add metadata or tags - for this reason, we use 'false'
+        restrictions: { // we can add restrictions here:
+          maxFileSize: 31457280, //i.e. 30MB
+          maxNumberOfFiles: 20,
+          minNumberOfFiles: null, // if null, no minimum requirement
+          allowedFileTypes: null // can use an array of extensions, i.e. ['.doc', '.docx', '.xls', '.xlsx']
+        },
+        logger: Uppy.debugLogger, // use this for debugging to see what's gone wrong
+      })
+        .use(Uppy.Dashboard, { // configure the Uppy Dashboard plugin...
+          trigger: ".UppyModalOpenerBtn", // what we click to make Uppy dashboard modal appear - this is the class of our button, above
+          inline: false, // if true, dashboard becomes part of layout rather than a modal - you can eliminate the button in that case
+          closeModalOnClickOutside: true, // if true, we can click anywhere outside the modal to close it
+          showLinkToFileUploadResult: false, // if true, a link to the uploaded file is generated and copies to the user's clipboard when clicked. Note the link won't contain credentials, and you'll need to configure your bucket's permissions and CORS settings to get this to work
+          target: '#drag-drop-area', // this is the id of the <div> above - use a class instead of an id if multiple drag drop areas are required
+          replaceTargetContent: false, // if true, removes all children of the target element - use this to put an upload form in place which disappears if Uppy appears - a fallback option
+          showProgressDetails: true, // false shows % only while true shows % + MB of MB plus time left
+          proudlyDisplayPoweredByUppy: true, // true shows 'Powered by Uppy' branding; false removes this. Attribution is nice...
+          note: "Images, Word, Excel, PDF, and similar files only, max 20 files of 30 MB each", // instructions to your users
+          height: 470, // height of the Dashboard in pixels - only applies if "inline: true" above - doesn't apply here since we are using the modal - have included here for reference only
+          metaFields: [ // here we can include user editable fields, and we can use these elsewhere (i.e. upload as metadata, use as tags, use in our DB, etc.) Note that these don't seem to work out of the box - we need to add our own logic to make them work (notwithstanding the Uppy documentation...)
+            { id: 'name', name: 'Name', placeholder: 'You can rename the file here' }, // id is what we'll use to refer to this; name is what the user sees; placeholder is placeholder text
+            { id: 'caption', name: "Caption", placeholder: "Briefly describe what the file contains" }
+          ],
+          browserBackButtonClose: true // true allows the user to click the browser's back button to close the modal, rather than go back a page - this is a good idea!
+        })
+        .use(AwsS3, { // use the AwsS3 plugin                                  
+          fields: [], // empty array 
+          getUploadParameters(file) { // here we prepare our request to the server for the upload URL
+            return fetch('https://us-central1-videos-a9d19.cloudfunctions.net/uploader', { // we'll send the info asynchronously via fetch to our nodejs server endpoint, '/uploader' in this case
+              method: 'POST', // all the examples I found via the Uppy site used 'PUT' and did not work
+              headers: {
+                'content-type': 'application/x-www-form-urlencoded', // examples I found via the Uppy site used 'content-type': 'application/json' and did not work
+              },
+              body: JSON.stringify({
+                filename: file.name, // here we are passing data to the server/back end
+                contentType: file.type,
+                metadata: {
+                  'name': file.meta['name'], // here we pass the 'name' variable to the back end, with 'file.meta['name']' referring to the 'name' from our metaFields id above
+                  'caption': file.meta['caption'] // here we pass the 'caption' variable to the back end, with 'file.meta['caption']' referring to the 'caption' from our metaFields id above
+                },
+              })
+            }).then((response) => {
+              return response.json(); // return the server's response as a JSON promise
+            }).then((data) => {
+              console.log('>>>', data); // here you can have a look at the data the server sent back - get rid of this for production!
+              return {
+                method: data.method, // here we send method, url, fields and headers to the AWS S3 bucket
+                url: data.url,
+                fields: data.fields,
+                headers: data.headers,
+              };
+            });
+          },
+        })
+      uppy.on('complete', (result) => {
+        if (result.successful) {
+          console.log('Upload complete! We’ve uploaded these files:', result.successful); // if upload succeeds, let's see what we uploaded
+        } else {
+          console.log('Upload error: ', result.failed); // if upload failed, let's see what went wrong
+        }
+      })
+    </script>
+
+
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script type="text/javascript"
+      src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.4/umd/popper.min.js"></script>
+    <script type="text/javascript"
+      src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.4.1/js/bootstrap.min.js"></script>
+    <script type="text/javascript"
+      src="https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.18.0/js/mdb.min.js"></script>
+    <script type="text/javascript"
+      src="https://cdnjs.cloudflare.com/ajax/libs/parsley.js/2.8.1/parsley.min.js"></script>
+    <script type="text/javascript"
+      src="https://cdnjs.cloudflare.com/ajax/libs/jquery-json/2.5.1/jquery.json.min.js"></script>
+    <script type="text/javascript"
+      src="https://cdnjs.cloudflare.com/ajax/libs/jquery-serialize-object/2.5.0/jquery.serialize-object.min.js"></script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/numeral.js/2.0.6/numeral.min.js"></script>
+  </div>
+</body>
+
+</html>
