@@ -68,7 +68,7 @@
         .use(AwsS3, { // use the AwsS3 plugin                                  
           fields: [], // empty array 
           getUploadParameters(file) { // here we prepare our request to the server for the upload URL
-            return fetch('https://us-central1-videos-a9d19.cloudfunctions.net/uploader', { // we'll send the info asynchronously via fetch to our nodejs server endpoint, '/uploader' in this case
+            return fetch('***', { // we'll send the info asynchronously via fetch to our nodejs server endpoint, '/uploader' in this case
               method: 'POST', // all the examples I found via the Uppy site used 'PUT' and did not work
               headers: {
                 'content-type': 'application/x-www-form-urlencoded', // examples I found via the Uppy site used 'content-type': 'application/json' and did not work
