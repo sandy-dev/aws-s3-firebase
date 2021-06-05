@@ -7,7 +7,7 @@
 - AWS s3
 
 #### Installation
-- git clone rn-gql-camera
-- cd rn-gql-camera
+- git clone aws-s3-firebase
+- cd aws-s3-firebase
 - yarn install
 - yarn dev
